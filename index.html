@@ -102,6 +102,33 @@
   .user .meta .r{font-size:11px; color:var(--ink-500);}
 
   .content{padding:22px 28px 60px; display:flex; flex-direction:column; gap:18px;}
+  .view{display:none; flex-direction:column; gap:18px;}
+  .view.active{display:flex;}
+
+  /* 테이블 첫 열 고정 — 가로 스크롤해도 학생명이 계속 보이도록 */
+  .sticky-col{position:sticky; left:0; background:#f8f9fd; z-index:5;}
+  td.sticky-col{background:#fff; z-index:3;}
+  tbody tr:hover td.sticky-col{background:#fafbff;}
+  tbody tr.selected td.sticky-col{background:var(--blue-50);}
+  th.sticky-col:first-child, td.sticky-col:first-child{left:0; width:38px;}
+  th.name-col, td.cell-name.sticky-col{left:38px; box-shadow:2px 0 4px rgba(20,25,50,.05);}
+
+  /* 데이터 도구(엑셀 업로드/다운로드) 패널 */
+  .data-tool-body{padding:6px 20px 18px;}
+  .data-tool-row{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:14px 0; border-bottom:1px solid var(--line);
+  }
+  .data-tool-row:last-child{border-bottom:none;}
+  .dt-title{font-size:13.3px; font-weight:700; margin-bottom:3px;}
+  .dt-desc{font-size:12px; color:var(--ink-500);}
+
+  /* 설정 화면: 강사/학교 칩 리스트 */
+  .settings-lists{display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:4px 20px 20px;}
+  .sl-title{font-size:12.5px; font-weight:700; color:var(--ink-700); margin-bottom:8px;}
+  .sl-chips{display:flex; flex-wrap:wrap; gap:6px;}
+  .sl-chips span{background:var(--blue-50); color:var(--blue-700); font-size:12px; font-weight:600; padding:5px 11px; border-radius:999px;}
+  @media (max-width:820px){ .settings-lists{grid-template-columns:1fr;} }
 
   /* ---------- KPI cards ---------- */
   .kpi-row{display:grid; grid-template-columns:repeat(7,1fr); gap:12px;}
@@ -289,9 +316,9 @@
       </div>
     </div>
     <div class="nav-group">
-      <div class="nav-item active" data-nav="dashboard"><span class="dot"></span> 대시보드</div>
+      <div class="nav-item" data-nav="dashboard"><span class="dot"></span> 대시보드</div>
       <div class="nav-label">변동 관리</div>
-      <div class="nav-item nav-sub active" data-nav="list"><span class="dot"></span> 변동 내역</div>
+      <div class="nav-item nav-sub" data-nav="list"><span class="dot"></span> 변동 내역</div>
       <div class="nav-item nav-sub" data-nav="add"><span class="dot"></span> 변동 등록</div>
       <div class="nav-label">정원 관리</div>
       <div class="nav-item nav-sub" data-nav="capacity"><span class="dot"></span> 반별 정원 현황</div>
@@ -341,87 +368,95 @@
 
     <div class="content">
 
-      <!-- KPI cards -->
-      <div class="kpi-row" id="kpiRow"></div>
+      <!-- ============ VIEW: 대시보드 ============ -->
+      <section class="view" data-view="dashboard">
+        <div class="kpi-row" id="kpiRow"></div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>오늘 확인 필요</h3>
+            <span class="link" data-goto="list">변동 내역 바로가기 →</span>
+          </div>
+          <div class="alert-list" id="alertList"></div>
+        </div>
+      </section>
 
-      <!-- Filter + toolbar + table -->
-      <div class="panel">
-        <div class="filter-bar">
-          <div class="field">
-            <label>학년</label>
-            <select id="fGrade"><option value="">전체</option><option>고1</option><option>고2</option><option>고3</option></select>
+      <!-- ============ VIEW: 변동 내역 ============ -->
+      <section class="view" data-view="list">
+        <div class="panel">
+          <div class="filter-bar">
+            <div class="field">
+              <label>학년</label>
+              <select id="fGrade"><option value="">전체</option><option>고1</option><option>고2</option><option>고3</option></select>
+            </div>
+            <div class="field">
+              <label>담당 강사</label>
+              <select id="fTeacher"><option value="">전체</option></select>
+            </div>
+            <div class="field">
+              <label>변동 유형</label>
+              <select id="fType"><option value="">전체</option></select>
+            </div>
+            <div class="field">
+              <label>요일</label>
+              <select id="fDay"><option value="">전체</option><option>월</option><option>화</option><option>수</option><option>목</option><option>금</option><option>토</option><option>일</option></select>
+            </div>
+            <div class="field">
+              <label>상태</label>
+              <select id="fStatus"><option value="">전체</option><option>대기</option><option>검토</option><option>승인</option></select>
+            </div>
+            <div class="field search-field">
+              <label>학생명 검색</label>
+              <div class="box">🔍 <input type="text" id="fSearch" placeholder="이름으로 검색"></div>
+            </div>
           </div>
-          <div class="field">
-            <label>담당 강사</label>
-            <select id="fTeacher"><option value="">전체</option></select>
+          <div class="toolbar">
+            <button class="btn primary" id="btnAdd">＋ 변동 등록</button>
+            <div class="spacer"></div>
+            <button class="btn" id="btnMail">✉ 안내문 발송</button>
+            <button class="btn success" id="btnApprove">✔ 학장 처리(승인)</button>
+            <button class="btn" id="btnExport">⬇ 엑셀 다운로드</button>
           </div>
-          <div class="field">
-            <label>변동 유형</label>
-            <select id="fType"><option value="">전체</option></select>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th class="sticky-col"><input type="checkbox" id="checkAll"></th>
+                  <th class="sticky-col name-col">학생명</th>
+                  <th>학교 / 학년</th>
+                  <th>담당 강사</th>
+                  <th>현재 반</th>
+                  <th>변경 반</th>
+                  <th>요일</th>
+                  <th>시간</th>
+                  <th>변동 유형</th>
+                  <th>이동 사유</th>
+                  <th>적용일</th>
+                  <th>상태</th>
+                  <th>중복 체크</th>
+                  <th>안내 발송</th>
+                  <th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
           </div>
-          <div class="field">
-            <label>요일</label>
-            <select id="fDay"><option value="">전체</option><option>월</option><option>화</option><option>수</option><option>목</option><option>금</option><option>토</option><option>일</option></select>
+          <div id="emptyState" class="empty-state" style="display:none;">
+            <div class="big">📋</div>
+            <div class="t">등록된 변동 내역이 없습니다</div>
+            <div>‘＋ 변동 등록’ 버튼을 눌러 첫 변동 내역을 입력해 보세요.</div>
           </div>
-          <div class="field">
-            <label>상태</label>
-            <select id="fStatus"><option value="">전체</option><option>대기</option><option>검토</option><option>승인</option></select>
-          </div>
-          <div class="field search-field">
-            <label>학생명 검색</label>
-            <div class="box">🔍 <input type="text" id="fSearch" placeholder="이름으로 검색"></div>
+          <div class="table-footer">
+            <div>전체 <b id="totalCount">0</b>건</div>
+            <div class="page-size">
+              <select id="pageSize"><option value="10">10개씩 보기</option><option value="20">20개씩 보기</option><option value="50">50개씩 보기</option></select>
+            </div>
+            <div class="pagination" id="pagination"></div>
           </div>
         </div>
-        <div class="toolbar">
-          <button class="btn primary" id="btnAdd">＋ 변동 등록</button>
-          <button class="btn" id="btnUpload">⬆ 엑셀 일괄 등록</button>
-          <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
-          <button class="btn" id="btnTemplate">양식 다운로드</button>
-          <div class="spacer"></div>
-          <button class="btn" id="btnMail">✉ 안내문 발송</button>
-          <button class="btn success" id="btnApprove">✔ 학장 처리(승인)</button>
-          <button class="btn" id="btnExport">⬇ 엑셀 다운로드</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th><input type="checkbox" id="checkAll"></th>
-                <th>학생명</th>
-                <th>학교 / 학년</th>
-                <th>담당 강사</th>
-                <th>현재 반</th>
-                <th>변경 반</th>
-                <th>요일</th>
-                <th>시간</th>
-                <th>변동 유형</th>
-                <th>이동 사유</th>
-                <th>적용일</th>
-                <th>상태</th>
-                <th>중복 체크</th>
-                <th>안내 발송</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="tbody"></tbody>
-          </table>
-        </div>
-        <div id="emptyState" class="empty-state" style="display:none;">
-          <div class="big">📋</div>
-          <div class="t">등록된 변동 내역이 없습니다</div>
-          <div>‘＋ 변동 등록’ 버튼을 눌러 첫 변동 내역을 입력해 보세요.</div>
-        </div>
-        <div class="table-footer">
-          <div>전체 <b id="totalCount">0</b>건</div>
-          <div class="page-size">
-            <select id="pageSize"><option value="10">10개씩 보기</option><option value="20">20개씩 보기</option><option value="50">50개씩 보기</option></select>
-          </div>
-          <div class="pagination" id="pagination"></div>
-        </div>
-      </div>
+      </section>
 
-      <!-- Bottom grid -->
-      <div class="bottom-grid">
+      <!-- ============ VIEW: 반별 정원 현황 ============ -->
+      <section class="view" data-view="capacity">
         <div class="panel">
           <div class="panel-head">
             <div>
@@ -444,14 +479,63 @@
             </table>
           </div>
         </div>
+      </section>
 
+      <!-- ============ VIEW: 데이터 (엑셀 업로드/다운로드) ============ -->
+      <section class="view" data-view="importexport">
         <div class="panel">
-          <div class="panel-head">
-            <h3>오늘 확인 필요</h3>
+          <div class="panel-head"><h3>변동 내역 — 엑셀로 관리</h3></div>
+          <div class="data-tool-body">
+            <div class="data-tool-row">
+              <div><div class="dt-title">① 양식 다운로드</div><div class="dt-desc">정해진 열 순서(변동유형·학생명·학교…)로 된 빈 엑셀 양식을 받습니다.</div></div>
+              <button class="btn" id="btnTemplate">양식 다운로드</button>
+            </div>
+            <div class="data-tool-row">
+              <div><div class="dt-title">② 엑셀 일괄 등록</div><div class="dt-desc">양식에 맞춰 작성한 파일을 올리면 여러 건이 한 번에 구글시트에 등록됩니다.</div></div>
+              <button class="btn primary" id="btnUpload">⬆ 파일 선택 후 업로드</button>
+              <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
+            </div>
+            <div class="data-tool-row">
+              <div><div class="dt-title">③ 현재 목록 다운로드</div><div class="dt-desc">지금 필터에 걸려 있는 변동 내역을 엑셀 파일로 저장합니다.</div></div>
+              <button class="btn" id="btnExport2">⬇ 엑셀 다운로드</button>
+            </div>
           </div>
-          <div class="alert-list" id="alertList"></div>
         </div>
-      </div>
+        <div class="panel">
+          <div class="panel-head"><h3>반별 정원 현황 — 엑셀로 관리</h3></div>
+          <div class="data-tool-body">
+            <div class="data-tool-row">
+              <div><div class="dt-title">① 양식 다운로드</div><div class="dt-desc">담당강사·반명·정원·현재인원 열로 된 빈 엑셀 양식을 받습니다.</div></div>
+              <button class="btn" id="btnCapTemplate2">양식 다운로드</button>
+            </div>
+            <div class="data-tool-row">
+              <div><div class="dt-title">② 엑셀 일괄 등록</div><div class="dt-desc">여러 반을 한 번에 등록합니다. 기존 반과 이름이 같으면 중복으로 추가되니 먼저 화면에서 확인해 주세요.</div></div>
+              <button class="btn primary" id="btnCapUpload2">⬆ 파일 선택 후 업로드</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ VIEW: 학교·강사 목록 설정 ============ -->
+      <section class="view" data-view="settings">
+        <div class="panel">
+          <div class="panel-head"><h3>학교 · 담당 강사 목록</h3></div>
+          <div style="padding:16px 20px; font-size:12.8px; color:var(--ink-700); line-height:1.7;">
+            이 목록은 변동 등록 화면의 드롭다운·자동완성에 쓰이며, 현재는 <b>파일 안에 코드로 저장</b>되어 있어 실시간으로 이 화면에서 바로 고칠 수는 없습니다.
+            강사 임용·퇴사, 신규 제휴 학교 등으로 목록을 바꿔야 하면, 최신 명단을 알려주시면 파일을 수정해서 다시 드립니다.
+          </div>
+          <div class="settings-lists">
+            <div>
+              <div class="sl-title">담당 강사 (<span id="teacherCountLabel">0</span>명)</div>
+              <div class="sl-chips" id="teacherChips"></div>
+            </div>
+            <div>
+              <div class="sl-title">학교 (<span id="schoolCountLabel">0</span>개교)</div>
+              <div class="sl-chips" id="schoolChipsView"></div>
+            </div>
+          </div>
+        </div>
+      </section>
 
     </div>
   </div>
@@ -463,6 +547,7 @@
     <div class="modal-head">
       <h3 id="modalTitle">변동 등록</h3>
       <button class="modal-close" id="modalClose">✕</button>
+
     </div>
     <div class="modal-body">
       <div class="form-field full">
@@ -649,7 +734,8 @@ var state = {
   editingId: null,
   activeType: null,
   connected: false,
-  syncing: false
+  syncing: false,
+  currentView: "list"
 };
 
 /* =========================================================================
@@ -1012,6 +1098,28 @@ function renderAll(){
 }
 
 /* =========================================================================
+   화면 전환 (사이드바 네비게이션)
+   ========================================================================= */
+function switchView(view){
+  state.currentView = view;
+  Array.prototype.forEach.call(document.querySelectorAll(".view"), function(sec){
+    sec.classList.toggle("active", sec.getAttribute("data-view")===view);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".nav-item"), function(el){
+    el.classList.toggle("active", el.getAttribute("data-nav")===view);
+  });
+  if(window.innerWidth <= 820) $("sidebar").classList.remove("open");
+  window.scrollTo({top:0, behavior:"instant"});
+}
+
+function renderSettingsView(){
+  $("teacherCountLabel").textContent = TEACHERS.length;
+  $("teacherChips").innerHTML = TEACHERS.map(function(t){ return "<span>"+esc(t)+"</span>"; }).join("");
+  $("schoolCountLabel").textContent = SCHOOLS.length;
+  $("schoolChipsView").innerHTML = SCHOOLS.map(function(s){ return "<span>"+esc(s)+"</span>"; }).join("");
+}
+
+/* =========================================================================
    모달 (변동 등록 / 수정)
    ========================================================================= */
 function renderTypePick(selected){
@@ -1316,6 +1424,27 @@ function bindEvents(){
   $("btnCapUpload").addEventListener("click", function(){ $("capFileInput").click(); });
   $("capFileInput").addEventListener("change", handleCapFileUpload);
 
+  // 데이터(엑셀 업로드/다운로드) 전용 화면의 중복 버튼들 — 같은 동작을 그대로 연결
+  $("btnExport2").addEventListener("click", exportExcel);
+  $("btnCapTemplate2").addEventListener("click", downloadCapTemplate);
+  $("btnCapUpload2").addEventListener("click", function(){ $("capFileInput").click(); });
+
+  // 사이드바 네비게이션
+  Array.prototype.forEach.call(document.querySelectorAll(".nav-item"), function(el){
+    el.addEventListener("click", function(){
+      var nav = el.getAttribute("data-nav");
+      if(nav === "add"){
+        switchView("list");
+        openModal(null);
+        return;
+      }
+      switchView(nav);
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-goto]"), function(el){
+    el.addEventListener("click", function(){ switchView(el.getAttribute("data-goto")); });
+  });
+
   $("btnAddClass").addEventListener("click", function(){
     var className = prompt("추가할 반 이름을 입력하세요.");
     if(!className) return;
@@ -1370,7 +1499,9 @@ function closeSettings(){ $("settingsOverlay").classList.remove("show"); }
    ========================================================================= */
 function init(){
   renderFilterOptions();
+  renderSettingsView();
   bindEvents();
+  switchView("list");
   refreshFromServer();
 }
 init();
