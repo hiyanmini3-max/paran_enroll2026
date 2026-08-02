@@ -18,7 +18,7 @@
     --beige-bg:#FBF4E6;
     --beige-100:#F6ECD8;
     --beige-200:#EFE0C3;
-    --card:#FFFEFA;
+    --card:#FFFEFA;  
     --line:#E9DBBB;
     --text:#2E2115;
     --muted:#8C7A5E;
@@ -627,7 +627,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 /* =========================================================================
    설정 — 배포 전 반드시 채워 넣으세요
    ========================================================================= */
-var CONFIG = { API_URL: "" };
+var CONFIG = { API_URL: "https://script.google.com/macros/s/AKfycbyEHk9soCzFBneIeZewPAPVKdZNmR4x6LrGJNz8tX7JGp4EnmARJyHZakCTarq64xTH/exec" };
 var LOCAL_URL_KEY = "portal_api_url_override";
 function getApiUrl(){ return CONFIG.API_URL || localStorage.getItem(LOCAL_URL_KEY) || ""; }
 
