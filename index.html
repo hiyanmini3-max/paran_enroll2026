@@ -509,10 +509,11 @@
       <section class="view" data-view="notice">
         <div class="topbar"><div><h1>공지 관리</h1><div class="sub">공지는 확인 처리를 해야 완료됩니다 · 미확인자가 표시됩니다</div></div></div>
         <div class="panel">
-          <h3>새 공지 작성</h3>
+          <div class="panel-flex-head"><h3>새 공지 작성</h3><span id="noticeEditBadge" style="display:none;font-size:11.5px;color:var(--warn);font-weight:800;">✎ 수정 중</span></div>
           <div class="form-row"><div class="field"><label>제목</label><input id="nz_title" type="text"></div></div>
           <div class="form-row"><div class="field"><label>내용</label><textarea id="nz_content"></textarea></div></div>
           <button class="btn gold" id="btnAddNotice">공지 등록</button>
+          <button class="btn" id="btnCancelNoticeEdit" style="display:none;">수정 취소</button>
         </div>
         <div class="panel"><h3>공지 목록</h3><div id="noticeList" class="loading">불러오는 중...</div></div>
       </section>
@@ -521,7 +522,7 @@
       <section class="view" data-view="board">
         <div class="topbar"><div><h1>월간 · 주간 업무 게시판</h1><div class="sub">학사일정, 시험, 설명회, 행사 등 기간별 업무를 한눈에 확인합니다</div></div></div>
         <div class="panel">
-          <h3>새 일정 등록</h3>
+          <div class="panel-flex-head"><h3>새 일정 등록</h3><span id="boardEditBadge" style="display:none;font-size:11.5px;color:var(--warn);font-weight:800;">✎ 수정 중</span></div>
           <div class="form-row c4">
             <div class="field"><label>날짜</label><input id="bd_date" type="date"></div>
             <div class="field"><label>구분</label>
@@ -531,6 +532,7 @@
             <div class="field"><label>&nbsp;</label><button class="btn dark" style="width:100%;justify-content:center;" id="btnAddBoard">등록</button></div>
           </div>
           <div class="form-row"><div class="field"><label>내용 (선택)</label><textarea id="bd_content" placeholder="상세 내용, 준비사항 등"></textarea></div></div>
+          <button class="btn" id="btnCancelBoardEdit" style="display:none;">수정 취소</button>
         </div>
         <div class="panel">
           <div class="panel-flex-head">
@@ -627,7 +629,7 @@ if(xr(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Er
 /* =========================================================================
    설정 — 배포 전 반드시 채워 넣으세요
    ========================================================================= */
-var CONFIG = { API_URL: "https://script.google.com/macros/s/AKfycbyEHk9soCzFBneIeZewPAPVKdZNmR4x6LrGJNz8tX7JGp4EnmARJyHZakCTarq64xTH/exec" };
+var CONFIG = { API_URL: "" };
 var LOCAL_URL_KEY = "portal_api_url_override";
 function getApiUrl(){ return CONFIG.API_URL || localStorage.getItem(LOCAL_URL_KEY) || ""; }
 
@@ -656,7 +658,8 @@ var uiState = {
   view:"dashboard", stuSub:"list",
   filters:{grade:"",teacher:"",type:"",day:"",status:"",search:""},
   page:1, pageSize:10, selected:{}, editingId:null, activeType:null,
-  boardView:"month", boardAnchor:new Date()
+  boardView:"month", boardAnchor:new Date(),
+  editingNoticeId:null, editingBoardId:null
 };
 var pendingLoginName = null;
 
@@ -980,11 +983,16 @@ async function addTaskReportUI(id, content){
   try{ await apiPost("addTaskReport", {id:id, author:currentUser, content:content}); await refreshFromServer(); }
   catch(e){ toast("보고 등록 실패: "+e.message); }
 }
+async function deleteTaskUI(id){
+  if(!confirm("이 업무를 삭제하시겠습니까? 이력과 보고 내용도 함께 삭제됩니다.")) return;
+  try{ await apiPost("deleteTask", {id:id}); await refreshFromServer(); toast("삭제되었습니다."); }
+  catch(e){ toast("삭제 실패: "+e.message); }
+}
 function renderTasks(){
   var arr = data.tasks.slice().sort(function(a,b){ return (b.createdAt||"").localeCompare(a.createdAt||""); });
   var el = $("taskList");
   if(arr.length===0){ el.innerHTML='<div class="empty">등록된 업무가 없습니다.</div>'; return; }
-  var html = '<div class="table-wrap"><table><thead><tr><th>내용</th><th>대상</th><th>담당자</th><th>기한</th><th>상태</th><th>요청자</th><th>이력·보고</th></tr></thead><tbody>';
+  var html = '<div class="table-wrap"><table><thead><tr><th>내용</th><th>대상</th><th>담당자</th><th>기한</th><th>상태</th><th>요청자</th><th>이력·보고</th><th></th></tr></thead><tbody>';
   arr.forEach(function(t){
     var reports = t.reports || [], history = t.history || [];
     html += '<tr>'+
@@ -994,13 +1002,14 @@ function renderTasks(){
       '<td style="font-size:11.5px;color:var(--muted);">'+esc(t.requester)+'<br>'+esc(t.createdAt)+'</td>'+
       '<td>'+(history.length>0?'<button class="small-link" data-id="'+t.id+'" data-act="toggleHist">이력('+history.length+')</button><br>':'')+
         '<button class="small-link" data-id="'+t.id+'" data-act="toggleRep">보고('+reports.length+')</button></td>'+
+      '<td><button class="icon-btn" data-id="'+t.id+'" data-act="delTask" title="삭제">🗑</button></td>'+
     '</tr>';
     if(history.length>0){
-      html += '<tr><td colspan="7" style="border-bottom:none;padding:0 10px;"><div class="history-box" id="hist-'+t.id+'">'+
+      html += '<tr><td colspan="8" style="border-bottom:none;padding:0 10px;"><div class="history-box" id="hist-'+t.id+'">'+
         history.map(function(h){ return '<div class="history-line">'+esc(h.time)+' · <b>'+esc(h.editor)+'</b>: '+esc(h.before)+' → '+esc(h.after)+'</div>'; }).join("")+
       '</div></td></tr>';
     }
-    html += '<tr><td colspan="7" style="padding:0 10px 10px;"><div class="report-box" id="report-'+t.id+'">'+
+    html += '<tr><td colspan="8" style="padding:0 10px 10px;"><div class="report-box" id="report-'+t.id+'">'+
       (reports.length>0 ? reports.map(function(r){ return '<div class="history-line"><b>'+esc(r.author)+'</b> ('+esc(r.time)+'): '+esc(r.content)+'</div>'; }).join("") : '<div style="color:var(--muted);">등록된 보고가 없습니다.</div>')+
       '<div style="display:flex;gap:6px;margin-top:8px;"><input type="text" id="report-input-'+t.id+'" placeholder="진행 상황, 결과 보고" style="flex:1;font-size:12px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;">'+
       '<button class="btn sm" data-id="'+t.id+'" data-act="submitReport">등록</button></div></div></td></tr>';
@@ -1011,6 +1020,7 @@ function renderTasks(){
   el.querySelectorAll('[data-act="statusChange"]').forEach(function(s){ s.addEventListener("change", function(){ updateTaskStatusUI(s.getAttribute("data-id"), s.value); }); });
   el.querySelectorAll('[data-act="toggleHist"]').forEach(function(b){ b.addEventListener("click", function(){ $("hist-"+b.getAttribute("data-id")).classList.toggle("show"); }); });
   el.querySelectorAll('[data-act="toggleRep"]').forEach(function(b){ b.addEventListener("click", function(){ $("report-"+b.getAttribute("data-id")).classList.toggle("show"); }); });
+  el.querySelectorAll('[data-act="delTask"]').forEach(function(b){ b.addEventListener("click", function(){ deleteTaskUI(b.getAttribute("data-id")); }); });
   el.querySelectorAll('[data-act="submitReport"]').forEach(function(b){
     b.addEventListener("click", function(){
       var id = b.getAttribute("data-id");
@@ -1052,15 +1062,40 @@ function renderMakeups(){
 }
 
 /* ================= NOTICE ================= */
-async function addNoticeUI(){
+async function addOrUpdateNoticeUI(){
   var title=$("nz_title").value.trim(), content=$("nz_content").value.trim();
   if(!title||!content){ toast("제목과 내용을 입력해주세요."); return; }
   try{
-    await apiPost("addNotice", {title:title, content:content, author:currentUser});
-    $("nz_title").value=""; $("nz_content").value="";
+    if(uiState.editingNoticeId){
+      await apiPost("updateNotice", {id:uiState.editingNoticeId, title:title, content:content});
+      toast("공지가 수정되었습니다.");
+    } else {
+      await apiPost("addNotice", {title:title, content:content, author:currentUser});
+      toast("공지가 등록되었습니다.");
+    }
+    cancelNoticeEdit();
     await refreshFromServer();
-    toast("공지가 등록되었습니다.");
-  }catch(e){ toast("등록 실패: "+e.message); }
+  }catch(e){ toast("저장 실패: "+e.message); }
+}
+function startNoticeEdit(n){
+  uiState.editingNoticeId = n.id;
+  $("nz_title").value = n.title; $("nz_content").value = n.content;
+  $("noticeEditBadge").style.display = "inline";
+  $("btnCancelNoticeEdit").style.display = "inline-flex";
+  $("btnAddNotice").textContent = "수정 저장";
+  $("nz_title").scrollIntoView({behavior:"smooth", block:"center"});
+}
+function cancelNoticeEdit(){
+  uiState.editingNoticeId = null;
+  $("nz_title").value=""; $("nz_content").value="";
+  $("noticeEditBadge").style.display = "none";
+  $("btnCancelNoticeEdit").style.display = "none";
+  $("btnAddNotice").textContent = "공지 등록";
+}
+async function deleteNoticeUI(id){
+  if(!confirm("이 공지를 삭제하시겠습니까?")) return;
+  try{ await apiPost("deleteNotice", {id:id}); await refreshFromServer(); toast("삭제되었습니다."); }
+  catch(e){ toast("삭제 실패: "+e.message); }
 }
 async function doConfirmNotice(id){
   try{ await apiPost("confirmNotice", {id:id, name:currentUser}); await refreshFromServer(); }
@@ -1075,7 +1110,12 @@ function renderNotices(){
     var unconfirmed = ALL_USERS.filter(function(u){ return confirmedBy.indexOf(u)===-1; });
     var iConfirmed = confirmedBy.indexOf(currentUser)!==-1;
     return '<div class="notice-item">'+
-      '<div class="ntitle">'+esc(n.title)+'</div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'+
+        '<div class="ntitle">'+esc(n.title)+'</div>'+
+        '<div style="display:flex;gap:6px;flex-shrink:0;">'+
+          '<button class="icon-btn" data-id="'+n.id+'" data-act="editNotice" title="수정">✎</button>'+
+          '<button class="icon-btn" data-id="'+n.id+'" data-act="delNotice" title="삭제">🗑</button>'+
+        '</div></div>'+
       '<div class="nmeta">'+esc(n.author)+' · '+esc(n.createdAt)+'</div>'+
       '<div class="ncontent">'+esc(n.content)+'</div>'+
       '<div class="confirm-row"><div class="confirm-list">확인 '+confirmedBy.length+'/'+ALL_USERS.length+
@@ -1086,6 +1126,15 @@ function renderNotices(){
   el.querySelectorAll(".confirm-btn").forEach(function(b){
     if(!b.disabled) b.addEventListener("click", function(){ doConfirmNotice(b.getAttribute("data-id")); });
   });
+  el.querySelectorAll('[data-act="editNotice"]').forEach(function(b){
+    b.addEventListener("click", function(){
+      var n = data.notices.find(function(x){return String(x.id)===String(b.getAttribute("data-id"));});
+      if(n) startNoticeEdit(n);
+    });
+  });
+  el.querySelectorAll('[data-act="delNotice"]').forEach(function(b){
+    b.addEventListener("click", function(){ deleteNoticeUI(b.getAttribute("data-id")); });
+  });
 }
 
 /* ================= BOARD ================= */
@@ -1095,15 +1144,35 @@ function parseYMD(s){ if(!s) return null; var p=s.split('-').map(Number); return
 function fmtYMD(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0'); }
 function getWeekStart(d){ var day=d.getDay(); var diff=(day===0?-6:1-day); var m=new Date(d); m.setDate(d.getDate()+diff); return toDateOnly(m); }
 
-async function addBoardPostUI(){
+async function addOrUpdateBoardPostUI(){
   var date=$("bd_date").value, category=$("bd_category").value, title=$("bd_title").value.trim(), content=$("bd_content").value.trim();
   if(!date||!title){ toast("날짜와 제목은 필수입니다."); return; }
   try{
-    await apiPost("addBoardPost", {date:date, category:category, title:title, content:content, author:currentUser});
-    $("bd_title").value=""; $("bd_content").value="";
+    if(uiState.editingBoardId){
+      await apiPost("updateBoardPost", {id:uiState.editingBoardId, date:date, category:category, title:title, content:content});
+      toast("일정이 수정되었습니다.");
+    } else {
+      await apiPost("addBoardPost", {date:date, category:category, title:title, content:content, author:currentUser});
+      toast("등록되었습니다.");
+    }
+    cancelBoardEdit();
     await refreshFromServer();
-    toast("등록되었습니다.");
-  }catch(e){ toast("등록 실패: "+e.message); }
+  }catch(e){ toast("저장 실패: "+e.message); }
+}
+function startBoardEdit(p){
+  uiState.editingBoardId = p.id;
+  $("bd_date").value = p.date; $("bd_category").value = p.category; $("bd_title").value = p.title; $("bd_content").value = p.content||"";
+  $("boardEditBadge").style.display = "inline";
+  $("btnCancelBoardEdit").style.display = "inline-flex";
+  $("btnAddBoard").textContent = "수정 저장";
+  $("bd_date").scrollIntoView({behavior:"smooth", block:"center"});
+}
+function cancelBoardEdit(){
+  uiState.editingBoardId = null;
+  $("bd_date").value=""; $("bd_title").value=""; $("bd_content").value=""; $("bd_category").value="학사일정";
+  $("boardEditBadge").style.display = "none";
+  $("btnCancelBoardEdit").style.display = "none";
+  $("btnAddBoard").textContent = "등록";
 }
 async function deleteBoardPostUI(id){
   if(!confirm("이 일정을 삭제하시겠습니까?")) return;
@@ -1156,15 +1225,23 @@ function renderBoard(){
     var isToday = d.getTime()===toDateOnly(new Date()).getTime();
     html += '<div class="board-daygroup"><div class="board-daylabel">'+(d.getMonth()+1)+'월 '+d.getDate()+'일 <span class="dow">('+DOW_KR[d.getDay()]+')</span>'+(isToday?' <span class="badge b-확인">오늘</span>':'')+'</div>';
     groups[dateKey].forEach(function(p){
-      var rightControl = p.type==="board" ? '<button class="icon-btn bdel" data-id="'+p.id+'" data-act="delBoard">🗑</button>' : '<span class="badge b-'+p.status.replace(" ","")+'">'+esc(p.status)+'</span>';
+      var rightControl = p.type==="board"
+        ? '<button class="icon-btn" data-id="'+p.id+'" data-act="editBoard" title="수정">✎</button><button class="icon-btn bdel" data-id="'+p.id+'" data-act="delBoard" title="삭제">🗑</button>'
+        : '<span class="badge b-'+p.status.replace(" ","")+'">'+esc(p.status)+'</span>';
       html += '<div class="board-item"><span class="cat-badge cat-'+p.category+'">'+esc(p.category)+'</span>'+
         '<div style="flex:1;"><div class="btitle">'+esc(p.title)+'</div>'+(p.content?'<div class="bcontent">'+esc(p.content)+'</div>':'')+
-        '<div class="bmeta">'+esc(p.author)+' · '+esc(p.createdAt)+'</div></div>'+rightControl+'</div>';
+        '<div class="bmeta">'+esc(p.author)+' · '+esc(p.createdAt)+'</div></div><div style="display:flex;gap:6px;flex-shrink:0;">'+rightControl+'</div></div>';
     });
     html += '</div>';
   });
   el.innerHTML = html;
   el.querySelectorAll('[data-act="delBoard"]').forEach(function(b){ b.addEventListener("click", function(){ deleteBoardPostUI(b.getAttribute("data-id")); }); });
+  el.querySelectorAll('[data-act="editBoard"]').forEach(function(b){
+    b.addEventListener("click", function(){
+      var p = data.board.find(function(x){return String(x.id)===String(b.getAttribute("data-id"));});
+      if(p) startBoardEdit(p);
+    });
+  });
 }
 
 /* =========================================================================
@@ -1448,9 +1525,11 @@ function bindAppEvents(){
   // Makeup
   $("btnAddMakeup").addEventListener("click", addMakeup);
   // Notice
-  $("btnAddNotice").addEventListener("click", addNoticeUI);
+  $("btnAddNotice").addEventListener("click", addOrUpdateNoticeUI);
+  $("btnCancelNoticeEdit").addEventListener("click", cancelNoticeEdit);
   // Board
-  $("btnAddBoard").addEventListener("click", addBoardPostUI);
+  $("btnAddBoard").addEventListener("click", addOrUpdateBoardPostUI);
+  $("btnCancelBoardEdit").addEventListener("click", cancelBoardEdit);
   $("boardViewBtn-month").addEventListener("click", function(){ setBoardView("month"); });
   $("boardViewBtn-week").addEventListener("click", function(){ setBoardView("week"); });
   $("btnBoardPrev").addEventListener("click", function(){ shiftBoardPeriod(-1); });
